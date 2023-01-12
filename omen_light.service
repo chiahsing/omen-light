@@ -1,0 +1,11 @@
+[Unit]
+Description="Set Omen LED chase and front panel lights"
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/omen_light chase on static 255 255 0
+ExecStart=/usr/local/bin/omen_light front on static 255 255 0
+ExecStart=/usr/local/bin/omen_light front suspend static 64 64 0
+
+[Install]
+WantedBy=multi-user.target

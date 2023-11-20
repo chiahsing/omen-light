@@ -1,5 +1,6 @@
 #include <hidapi/hidapi.h>
 
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <string>

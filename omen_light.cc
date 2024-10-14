@@ -9,6 +9,7 @@ constexpr uint16_t VENDOR_ID = 0x103c;
 constexpr uint16_t PRODUCT_ID = 0x84fd;
 constexpr uint8_t VERSION = 0x12;
 constexpr uint8_t MAX_BRIGHTNESS = 100;
+constexpr uint8_t N_LEDS = 8;
 
 struct __attribute__((packed)) Report {
   enum class Mode : uint8_t { STATIC = 1, OFF = 5, BREATHING, CYCLE, BLINKING };
@@ -18,8 +19,6 @@ struct __attribute__((packed)) Report {
     STATIC = 2,
     CHANGING = 10,
   };
-
-  enum class Led : uint8_t { FRONT = 1, CHASE = 2 };
 
   enum class Power : uint8_t { ON = 1, SUSPEND = 2 };
 
@@ -47,13 +46,12 @@ struct __attribute__((packed)) Report {
   uint8_t custom_color_count;  // total number of custom colors
   uint8_t custom_color_id;     // the custom color to set. Starting with 1
   uint8_t reserved2[2];
-  Color front_color;
-  Color chase_color;
-  uint8_t reserved3[34];
+  Color colors[N_LEDS];
+  uint8_t reserved3[40 - N_LEDS * 3];
   uint8_t brightness;  // 0-100
   Type type;
   uint8_t reserved4[4];
-  Led led;
+  uint8_t led;
   Power power;
   Theme theme;
   Speed speed;
@@ -64,7 +62,7 @@ void ShowUsage(char* arg0) {
 Usage:
   omen_light <led> <power> <mode> [options..]
 
-  led:   the led module to control. Can be 'front', 'chase'
+  led:   the led module to control. Can be 'front', 'chase' or a number from 1 to 8.
   power: the power state to which the setting is applied. Can be 'on', 'suspend'
   mode:  color mode. Can be 'off', 'static', 'breathing', 'cycle', 'blinking'
   
@@ -90,6 +88,9 @@ $ omen_light front suspend breathing slow galaxy
 
 # Set the front led to blink between red and blue when on
 $ omen_light front on blinking medium custom 255 0 0 0 0 255
+
+# Set led 4 to a static green color.
+$ omen_light 4 on static 0 255 0
 
 )Usage";
 }
@@ -122,14 +123,27 @@ bool SendReport(const Report& report) {
   return true;
 }
 
-bool ParseLed(const std::string& arg, Report::Led* led) {
+bool ParseLed(const std::string& arg, uint8_t* led) {
   if (arg == "front") {
-    *led = Report::Led::FRONT;
+    *led = 1;
   } else if (arg == "chase") {
-    *led = Report::Led::CHASE;
+    *led = 2;
   } else {
-    std::cerr << "unknown led: " << arg << std::endl;
-    return false;
+    try
+    {
+      *led = std::stoi(arg);
+      if ((*led < 1) || (*led > N_LEDS))
+      {
+        std::cerr << "led number out of range: " << arg << std::endl;
+        return false;
+      }
+    }
+    catch(const std::exception& e)
+    {
+      // probably not an int, move on
+      std::cerr << "unknown led: " << arg << std::endl;
+      return false;
+    }
   }
   return true;
 }
@@ -166,11 +180,7 @@ bool ParseMode(const std::string& arg, Report::Mode* mode) {
 
 void ParseColor(char** argv, Report* report) {
   Report::Color* c = nullptr;
-  if (report->led == Report::Led::FRONT) {
-    c = &report->front_color;
-  } else {
-    c = &report->chase_color;
-  }
+  c = &report->colors[report->led - 1];
 
   // Don't care about parsing error.
   c->r = std::atoi(argv[0]);

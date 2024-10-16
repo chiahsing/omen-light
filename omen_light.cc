@@ -28,7 +28,8 @@ struct __attribute__((packed)) Report {
     GALAXY,
     VOLCANO,
     JUNGO,
-    OCEAN
+    OCEAN,
+    UNICORN
   };
 
   enum class Speed : uint8_t { OFF = 0, SLOW, MEDIUM, FAST };
@@ -47,7 +48,7 @@ struct __attribute__((packed)) Report {
   uint8_t custom_color_id;     // the custom color to set. Starting with 1
   uint8_t reserved2[2];
   Color colors[N_LEDS];
-  uint8_t reserved3[40 - N_LEDS * 3];
+  uint8_t reserved3[40 - sizeof(colors)];
   uint8_t brightness;  // 0-100
   Type type;
   uint8_t reserved4[4];
@@ -75,8 +76,8 @@ Options for breathing, cycle, and blinking mode:
   omen_light <led> <power> breathing|... <speed> <theme> [<r> <g> <b>]...
 
     speed: the color changing speed. Can be 'slow', 'medium', 'fast.
-    theme: the theme of the colors. Can be 'galaxy, volcano', 'jungo', 'ocean, or 'custom'.
-           For custom theme, it needs to be followed by 1 to 4 sets of r, g, b values.
+    theme: the theme of the colors. Can be 'galaxy, volcano', 'jungo', 'ocean', 'unicorn' or 'custom'.
+           For custom theme, it needs to be followed by 1 to 6 sets of r, g, b values.
 
 Example:
 
@@ -129,17 +130,13 @@ bool ParseLed(const std::string& arg, uint8_t* led) {
   } else if (arg == "chase") {
     *led = 2;
   } else {
-    try
-    {
+    try {
       *led = std::stoi(arg);
-      if ((*led < 1) || (*led > N_LEDS))
-      {
+      if ((*led < 1) || (*led > N_LEDS)) {
         std::cerr << "led number out of range: " << arg << std::endl;
         return false;
       }
-    }
-    catch(const std::exception& e)
-    {
+    } catch (const std::exception& e) {
       // probably not an int, move on
       std::cerr << "unknown led: " << arg << std::endl;
       return false;
@@ -213,6 +210,8 @@ bool ParseTheme(const std::string& arg, Report::Theme* theme) {
     *theme = Report::Theme::JUNGO;
   } else if (arg == "ocean") {
     *theme = Report::Theme::OCEAN;
+  } else if (arg == "unicorn") {
+    *theme = Report::Theme::UNICORN;
   } else {
     std::cerr << "unknown theme: " << arg << std::endl;
     return false;
@@ -256,8 +255,17 @@ bool Run(int argc, char** argv) {
       if (report.theme == Report::Theme::CUSTOM) {
         // custom theme
         argc -= 2, argv += 2;  // consume arguments
-        if (argc != 3 && argc != 6 && argc != 9 && argc != 12) return false;
+        int mod = argc % 3;    // check if it's a multiple of 3
+        if (mod != 0) {
+          std::cerr << "rgb values are not a multiple of 3" << std::endl;
+          return false;
+        }
         report.custom_color_count = argc / 3;
+        if (report.custom_color_count < 1 || report.custom_color_count > 6) {
+          std::cerr << "incorrect amount of rgb sets: "
+                    << (int)report.custom_color_count << std::endl;
+          return false;
+        }
         for (int i = 0; i < report.custom_color_count; ++i) {
           report.custom_color_id = i + 1;
           ParseColor(argv + i * 3, &report);
